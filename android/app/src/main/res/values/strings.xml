@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Mikmon By Ersa</string>
+    <string name="title_activity_main">Mikmon By Ersa</string>
+    <string name="package_name">com.mikmon.app</string>
+    <string name="custom_url_scheme">com.mikmon.app</string>
+</resources>
