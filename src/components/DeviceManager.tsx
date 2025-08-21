@@ -8,7 +8,6 @@ type NewDevice = {
   password: string;
   port: number | '';
 };
-import { useAuth } from '../context/AuthContext';
 import { useAuthFetch } from '../hooks/useAuthFetch';
 import { PlusCircle, Trash2, Wifi, WifiOff, Loader, X, AlertCircle, Server, RefreshCw } from 'lucide-react';
 

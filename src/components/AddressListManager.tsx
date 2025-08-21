@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { PlusCircle, Trash2, List, Loader, AlertCircle, ShieldOff } from 'lucide-react';
 import { AddressListEntry } from '../types';
-import { useAuth } from '../context/AuthContext';
 import { useAuthFetch } from '../hooks/useAuthFetch';
-
 // Extended interface for local use with disabled property
 interface ExtendedAddressListEntry extends AddressListEntry {
   disabled?: boolean;

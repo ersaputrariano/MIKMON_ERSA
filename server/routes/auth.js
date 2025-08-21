@@ -151,52 +151,48 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     res.json({ message: 'Kata sandi berhasil diubah' });
 });
 
-router.post('/upload-picture', authenticateToken, (req, res, next) => {
-    console.log('[AUTH] Upload picture endpoint hit');
-    console.log('[AUTH] Headers:', req.headers);
-    console.log('[AUTH] User from auth:', req.user);
-    
-    // Create a new multer instance with the authenticated user
-    const storageWithUser = multer.diskStorage({
-        destination: (req, file, cb) => {
-            cb(null, UPLOADS_DIR);
-        },
-        filename: (req, file, cb) => {
-            console.log('[AUTH] User in multer filename:', req.user);
-            if (!req.user) {
-                return cb(new Error('User not authenticated for file upload'));
-            }
-            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-            cb(null, req.user.id + '-' + uniqueSuffix + path.extname(file.originalname));
+// --- Multer setup for file uploads ---
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, UPLOADS_DIR);
+    },
+    filename: (req, file, cb) => {
+        // req.user is available here thanks to the authenticateToken middleware
+        if (!req.user || !req.user.id) {
+            return cb(new Error('User not authenticated for file upload'));
         }
-    });
-    
-    const uploadWithUser = multer({
-        storage: storageWithUser,
-        limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-        fileFilter: (req, file, cb) => {
-            const filetypes = /jpeg|jpg|png|gif/;
-            const mimetype = filetypes.test(file.mimetype);
-            const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-            if (mimetype && extname) {
-                return cb(null, true);
-            }
-            cb(new Error('Error: File upload only supports the following filetypes - ' + filetypes));
-        }
-    });
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, req.user.id + '-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
 
-    uploadWithUser.single('profilePicture')(req, res, (err) => {
-        if (err) {
-            console.error('[AUTH] Multer error:', err);
-            return res.status(400).json({ message: err.message || 'Error uploading file' });
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        const filetypes = /jpeg|jpg|png|gif/;
+        const mimetype = filetypes.test(file.mimetype);
+        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+        if (mimetype && extname) {
+            return cb(null, true);
         }
-        
-        console.log('[AUTH] File uploaded:', req.file);
-        
+        cb(new Error('Error: File upload only supports the following filetypes - ' + filetypes));
+    }
+});
+
+
+router.post('/upload-picture', authenticateToken, upload.single('profilePicture'), (req, res) => {
+    // The 'upload.single' middleware handles the file upload and potential errors.
+    // If an error occurs in multer, it will be passed to the Express error handler.
+    // We can add a custom error handler for multer if needed, but for now, this is cleaner.
+    
+    // If we reach here, the file has been uploaded successfully.
+    try {
         if (!req.file) {
             return res.status(400).json({ message: 'File tidak terunggah' });
         }
 
+        console.log('[AUTH] File uploaded:', req.file);
         let users = readUsers();
         const userIndex = users.findIndex(u => u.id === req.user.id);
         if (userIndex === -1) {
@@ -212,7 +208,10 @@ router.post('/upload-picture', authenticateToken, (req, res, next) => {
         const token = generateToken(updatedUser);
 
         res.json({ message: 'Foto profil berhasil diunggah', token, profilePictureUrl });
-    });
+    } catch (error) {
+        console.error('[AUTH] Error processing uploaded picture:', error);
+        res.status(500).json({ message: 'Terjadi kesalahan pada server saat memproses gambar.' });
+    }
 });
 
 export default router;

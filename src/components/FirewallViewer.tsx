@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, FileText, Search, Loader, ShieldOff, Plus, Edit, Trash2, X } from 'lucide-react';
+import { useAuthFetch } from '../hooks/useAuthFetch';
 import { MonitoringData } from '../types';
 
 // --- Tipe Data (Asumsi dari ../types) ---
@@ -17,13 +18,38 @@ interface FirewallRule {
 interface FirewallViewerProps {
   selectedDevice: string | null;
   selectedMonitoringData: MonitoringData | { error: string; } | null;
-  authFetch: (url: string, options?: RequestInit) => Promise<Response>; // authFetch diperlukan untuk API call
+  onDataChange: () => void;
 }
 
 // --- Gaya Umum ---
 const cardStyle = "bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-2xl shadow-lg p-6";
 const inputStyle = "mt-1 block w-full bg-slate-700/50 border border-slate-600 rounded-lg shadow-sm focus:border-cyan-500 focus:ring-cyan-500 sm:text-sm text-slate-200 px-3 py-2 transition-colors";
 const buttonStyle = "inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-semibold rounded-lg shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 focus:ring-offset-slate-800 disabled:opacity-50 transition-all";
+
+const DeleteConfirmationModal = ({ rule, onConfirm, onCancel, isLoading }: { rule: FirewallRule | null; onConfirm: (ruleId: string) => void; onCancel: () => void; isLoading: boolean }) => {
+  if (!rule) return null;
+  return (
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className={`${cardStyle} max-w-sm w-full`}>
+        <div className="text-center">
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-500/20">
+            <Trash2 className="h-6 w-6 text-red-500" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-100 mt-4">Hapus Aturan Firewall?</h3>
+          <p className="text-sm text-slate-400 mt-2">
+            Yakin ingin menghapus aturan ini? Tindakan ini tidak dapat dibatalkan.
+          </p>
+        </div>
+        <div className="mt-6 flex justify-center space-x-4">
+          <button onClick={onCancel} disabled={isLoading} className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors disabled:opacity-50">Batal</button>
+          <button onClick={() => onConfirm(rule['.id'])} disabled={isLoading} className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center disabled:opacity-50">
+            {isLoading && <Loader className="animate-spin mr-2 h-4 w-4" />} Hapus
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // --- Komponen Form & Modal ---
 interface FirewallRuleFormProps {
@@ -110,15 +136,22 @@ const FirewallRuleForm: React.FC<FirewallRuleFormProps> = ({ initialData, onSave
     );
 };
 
-export const FirewallViewer: React.FC<FirewallViewerProps> = ({ selectedDevice, selectedMonitoringData, authFetch }) => {
+export const FirewallViewer: React.FC<FirewallViewerProps> = ({ selectedDevice, selectedMonitoringData, onDataChange }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormVisible, setIsFormVisible] = useState(false);
   const [editingRule, setEditingRule] = useState<FirewallRule | null>(null);
+  const [ruleToDelete, setRuleToDelete] = useState<FirewallRule | null>(null);
+  const authFetch = useAuthFetch();
+
+  // Type guard to check if data is valid MonitoringData
+  const isDataValid = (data: MonitoringData | { error: string } | null): data is MonitoringData => {
+    return data != null && !('error' in data);
+  };
 
   // Get firewall rules from monitoring data
-  const firewallRules = Array.isArray(selectedMonitoringData?.security?.firewallRules)
+  const firewallRules = isDataValid(selectedMonitoringData) && Array.isArray(selectedMonitoringData.security?.firewallRules)
     ? selectedMonitoringData.security.firewallRules
     : [];
 
@@ -154,8 +187,7 @@ export const FirewallViewer: React.FC<FirewallViewerProps> = ({ selectedDevice, 
         body: JSON.stringify(ruleData),
       });
       setIsFormVisible(false);
-      // Notify parent to refresh monitoring data
-      // This will cause the component to re-render with updated data
+      onDataChange(); // Memberi tahu induk untuk memuat ulang data
     } catch (err) {
       setError(`Gagal menyimpan aturan: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
@@ -164,15 +196,15 @@ export const FirewallViewer: React.FC<FirewallViewerProps> = ({ selectedDevice, 
   };
 
   const handleDelete = async (ruleId: string) => {
-    if (!selectedDevice || !confirm('Apakah Anda yakin ingin menghapus aturan ini?')) return;
+    if (!selectedDevice) return;
     setLoading(true);
     setError(null);
     try {
       await authFetch(`/api/monitoring/device/${selectedDevice}/firewall/filter/${ruleId}`, {
         method: 'DELETE',
       });
-      // Notify parent to refresh monitoring data
-      // This will cause the component to re-render with updated data
+      setRuleToDelete(null); // Tutup modal setelah berhasil
+      onDataChange(); // Memberi tahu induk untuk memuat ulang data
     } catch (err) {
       setError(`Gagal menghapus aturan: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
@@ -195,6 +227,7 @@ export const FirewallViewer: React.FC<FirewallViewerProps> = ({ selectedDevice, 
 
   return (
     <>
+      <DeleteConfirmationModal rule={ruleToDelete} onConfirm={handleDelete} onCancel={() => setRuleToDelete(null)} isLoading={loading} />
       {isFormVisible && <FirewallRuleForm initialData={editingRule} onSave={handleSave} onClose={() => setIsFormVisible(false)} isLoading={loading} />}
       <div className="space-y-8">
         <h1 className="text-3xl font-bold text-white flex items-center"><Shield className="w-8 h-8 mr-3 text-cyan-400"/>Firewall & Logs</h1>
@@ -230,9 +263,13 @@ export const FirewallViewer: React.FC<FirewallViewerProps> = ({ selectedDevice, 
             </div>
           </div>
           <div className="overflow-x-auto">
-            {loading ? <div className="flex justify-center items-center h-48"><Loader className="w-8 h-8 animate-spin text-cyan-400"/></div> : !selectedMonitoringData ? (
-              <div className="flex justify-center items-center h-48 text-slate-500">
-                <p>Data monitoring tidak tersedia. Pastikan perangkat telah dipilih dan terhubung.</p>
+            {loading ? <div className="flex justify-center items-center h-48"><Loader className="w-8 h-8 animate-spin text-cyan-400"/></div> : !isDataValid(selectedMonitoringData) ? (
+              <div className="flex justify-center items-center h-48 text-slate-500 text-center px-4">
+                <p>
+                  {selectedMonitoringData?.error
+                    ? `Gagal memuat data: ${selectedMonitoringData.error}`
+                    : 'Data monitoring tidak tersedia. Pastikan perangkat telah dipilih dan terhubung.'}
+                </p>
               </div>
             ) : filteredRules.length > 0 ? (
               <table className="min-w-full">
@@ -254,7 +291,7 @@ export const FirewallViewer: React.FC<FirewallViewerProps> = ({ selectedDevice, 
                       <td className="px-4 py-3 whitespace-nowrap text-sm">{rule.comment}</td>
                       <td className="px-4 py-3 text-center">
                         <button onClick={() => handleEdit(rule)} className="p-1 text-slate-500 hover:text-yellow-400 transition-colors"><Edit className="w-4 h-4"/></button>
-                        <button onClick={() => handleDelete(rule['.id'])} className="p-1 text-slate-500 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
+                        <button onClick={() => setRuleToDelete(rule)} className="p-1 text-slate-500 hover:text-red-500 transition-colors"><Trash2 className="w-4 h-4"/></button>
                       </td>
                     </tr>
                   ))}

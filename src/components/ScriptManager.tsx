@@ -151,15 +151,23 @@ export const ScriptManager: React.FC<ScriptManagerProps> = ({
     setSuccessMessage(null);
     
     let url = `/api/monitoring/device/${selectedDevice}/scripts`;
-    const options: RequestInit = { method: 'POST', headers: { 'Content-Type': 'application/json' }};
+    const options: RequestInit = { method: 'POST' };
 
     if (action === 'add') {
         options.body = JSON.stringify(newScript);
-    } else if (action === 'delete') {
+    } else if (action === 'delete' && payload?.scriptId) {
         url += `/${payload.scriptId}`;
         options.method = 'DELETE';
-    } else if (action === 'run') {
+    } else if (action === 'run' && payload?.scriptName) {
         url += `/${payload.scriptName}/run`;
+    } else {
+      // Kasus ini seharusnya tidak terjadi dengan implementasi saat ini,
+      // tetapi ini baik untuk keamanan tipe data.
+      const missing = action === 'delete' ? 'scriptId' : 'scriptName';
+      setError(`Galat internal: ${missing} harus disediakan untuk aksi '${action}'.`);
+      setLoading(false);
+      setModalState({ isOpen: false });
+      return;
     }
 
     try {

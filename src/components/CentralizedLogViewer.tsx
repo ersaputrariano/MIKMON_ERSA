@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { FileText, Search, AlertCircle, Info, AlertTriangle, ChevronsRight, RefreshCw, Loader2 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuthFetch } from '../hooks/useAuthFetch';
 
 // ============================================================================
 // DEFINISI TIPE DATA (TYPES DEFINITION)
@@ -63,7 +63,7 @@ export const CentralizedLogViewer: React.FC = () => {
   const [filterText, setFilterText] = useState<string>('');
   const [filterLevel, setFilterLevel] = useState<string>('all');
   const [filterDevice, setFilterDevice] = useState<string>('all');
-  const { token } = useAuth();
+  const authFetch = useAuthFetch();
   
   // Get unique device names for the device filter
   const deviceNames = useMemo(() => {
@@ -73,17 +73,11 @@ export const CentralizedLogViewer: React.FC = () => {
 
   // Mengambil data log dari API
   const fetchAllLogs = useCallback(async () => {
-    // Hanya tampilkan loader utama saat pertama kali memuat
-    if (logs.length === 0) {
-      setLoadingLogs(true);
-    }
     setLogError(null);
+    // Hanya tampilkan loader besar saat pertama kali memuat, bukan saat refresh
+    setLoadingLogs(true);
     try {
-      const response = await fetch('/api/monitoring/all-logs', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await authFetch('/api/monitoring/all-logs');
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -95,13 +89,13 @@ export const CentralizedLogViewer: React.FC = () => {
     } finally {
       setLoadingLogs(false);
     }
-  }, [logs.length, token]);
+  }, [authFetch]); // Hapus `logs.length` dari dependensi untuk menstabilkan fungsi
 
   useEffect(() => {
     fetchAllLogs();
     const interval = setInterval(fetchAllLogs, 5000); // Refresh logs setiap 5 detik
     return () => clearInterval(interval);
-  }, [fetchAllLogs]);
+  }, [fetchAllLogs]); // Sekarang aman karena fetchAllLogs sudah stabil
 
   const filteredLogs = useMemo(() => {
     // First filter by text search

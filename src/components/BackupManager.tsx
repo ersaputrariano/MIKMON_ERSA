@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAuthFetch } from '../hooks/useAuthFetch';
 import { 
     Save,
     Download,
@@ -21,13 +22,14 @@ export const BackupManager: React.FC<{ selectedDevice: string | null }> = ({ sel
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const authFetch = useAuthFetch();
 
   const handleApiCall = async (actionName: string, apiEndpoint: string, deviceId: string) => {
     setLoading(actionName);
     setError(null);
     setSuccessMessage(null);
     try {
-      const response = await fetch(`/api/monitoring/device/${deviceId}/${apiEndpoint}`, { method: 'POST' });
+      const response = await authFetch(`/api/monitoring/device/${deviceId}/${apiEndpoint}`, { method: 'POST' });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
       setSuccessMessage(result.message || `Proses ${actionName} berhasil!`);

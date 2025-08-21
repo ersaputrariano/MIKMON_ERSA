@@ -14,6 +14,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { useAuthFetch } from '../hooks/useAuthFetch';
 import { Device, MonitoringData, LogEntry } from '../types';
 
 interface HistoricalDataPoint {
@@ -54,6 +55,7 @@ export const HistoricalReportsManager: React.FC<HistoricalReportsManagerProps> =
   const [selectedTimeRange, setSelectedTimeRange] = useState<'1h' | '6h' | '24h' | '7d'>('1h');
   const [selectedMetric, setSelectedMetric] = useState<'cpu' | 'memory' | 'disk' | 'network' | 'connections'>('cpu');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const authFetch = useAuthFetch();
 
   const tooltipContentStyle: React.CSSProperties = {
     backgroundColor: '#1F2937',
@@ -73,12 +75,7 @@ export const HistoricalReportsManager: React.FC<HistoricalReportsManagerProps> =
       for (const device of devices) {
         if (device.connected) {
           try {
-            // Fetch monitoring data
-            const response = await fetch(`/api/monitoring/device/${device.id}`, {
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-              }
-            });
+            const response = await authFetch(`/api/monitoring/device/${device.id}`);
 
             if (response.ok) {
               const monitoringData: MonitoringData = await response.json();
@@ -119,11 +116,7 @@ export const HistoricalReportsManager: React.FC<HistoricalReportsManagerProps> =
 
       // Collect logs
       try {
-        const logsResponse = await fetch('/api/monitoring/all-logs', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
+        const logsResponse = await authFetch('/api/monitoring/all-logs');
 
         if (logsResponse.ok) {
           const allLogs: LogEntry[] = await logsResponse.json();
@@ -139,20 +132,18 @@ export const HistoricalReportsManager: React.FC<HistoricalReportsManagerProps> =
     } finally {
       setIsCollecting(false);
     }
-  }, [devices]);
+  }, [devices, authFetch]);
 
   // Auto-collect data every 30 seconds
   useEffect(() => {
+    // Lakukan pengambilan data awal saat komponen dimuat
+    collectData();
+
     if (autoRefresh) {
       const interval = setInterval(collectData, 30000);
       return () => clearInterval(interval);
     }
   }, [devices, autoRefresh, collectData]);
-
-  // Initial data collection
-  useEffect(() => {
-    collectData();
-  }, [devices, collectData]);
 
   // Filter data based on time range and selected device
   const filteredData = useMemo(() => {
@@ -184,16 +175,17 @@ export const HistoricalReportsManager: React.FC<HistoricalReportsManagerProps> =
     const groupedData = new Map<string, ChartDataPoint>();
 
     filteredData.forEach(point => {
-      const timeKey = new Date(point.timestamp).toLocaleTimeString();
-      
-      if (!groupedData.has(timeKey)) {
-        groupedData.set(timeKey, {
+      const timeKey = new Date(point.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+      let existing = groupedData.get(timeKey);
+      if (!existing) {
+        existing = {
           time: timeKey,
           timestamp: point.timestamp
-        });
+        };
+        groupedData.set(timeKey, existing);
       }
 
-      const existing = groupedData.get(timeKey);
       const deviceKey = point.deviceName;
 
       switch (selectedMetric) {

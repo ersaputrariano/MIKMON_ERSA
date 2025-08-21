@@ -193,10 +193,7 @@ export const TelegramSettings: React.FC = () => {
     try {
       const response = await authFetch('/api/telegram/config', {
         method: 'POST',
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ enabled: !config.enabled })
+        body: JSON.stringify({ enabled: !config.enabled }),
       });
 
       const data = await response.json();
